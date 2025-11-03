@@ -1,6 +1,11 @@
 # Use this Blueprint to deploy n8n on Render as a web
-# service that uses an external Neon DB (PostgreSQL)
-# to store workflow data permanently.
+# service that uses a Postgres database to store
+# workflow data.
+#
+# This Blueprint uses free instance types (specified by
+# `plan`) for both the web service and the database. You
+# can upgrade to paid instance types at any time to
+# increase resources.
 
 services:
   - type: web
@@ -9,43 +14,52 @@ services:
     runtime: image
     # You can give the service any name
     name: n8n-service
-
     image:
       # Pulls the n8n image tagged as latest from Docker Hub
       url: docker.io/n8nio/n8n:latest
 
     # All environment variables defined below are required!
+    #
+    # You can define additional environment variables as needed.
     envVars:
-      # Generates a base64-encoded key for encrypting credentials in n8n
-      # IMPORTANT: Do not modify this value after it's generated!
+      # Generates a base64-encoded key for
+      # encrypting credentials in n8n
+      #
+      # Do not modify this value after it's generated!
+      # If you do, you'll lose access to all credentials
+      # encrypted with the previous value.
       - key: N8N_ENCRYPTION_KEY
         generateValue: true
 
-      # --- VARIABLES MODIFIÉES POUR NEON DB ---
-      
-      # 1. Indique à n8n d'utiliser le pilote PostgreSQL standard
+      # These automatically populate connection details 
+      # for the Render Postgres database defined below
       - key: DB_TYPE
-        value: postgres
-      
-      # 2. Variable attendue par n8n pour la chaîne de connexion complète.
-      #    ATTENTION : Cette valeur DOIT être ajoutée manuellement sur Render
-      #    après le déploiement, en utilisant l'URL de connexion de Neon.
-      #    Laissez la valeur vide ici ou retirez la ligne 'value'
-      #    si vous ajoutez la variable manuellement sur le dashboard Render.
-      #
-      #    Exemple de l'URL Neon:
-      #    postgresql://[USER]:[PASSWORD]@[HOST].neonserver.cloud/neondb?sslmode=require
-      - key: N8N_DB_POSTGRES_URL 
-        value: "" # Laissez vide ou retirez cette ligne et ajoutez la variable dans le dashboard
+        value: postgresdb
+      - key: DB_POSTGRESDB_DATABASE
+        fromDatabase:
+          name: n8n-db
+          property: database
+      - key: DB_POSTGRESDB_HOST
+        fromDatabase:
+          name: n8n-db
+          property: host
+      - key: DB_POSTGRESDB_PASSWORD
+        fromDatabase:
+          name: n8n-db
+          property: password
+      - key: DB_POSTGRESDB_USER
+        fromDatabase:
+          name: n8n-db
+          property: user
 
-      # --- Autres variables N8N recommandées ---
-      - key: N8N_HOST
-        # Ceci sera remplacé automatiquement par l'URL Render de votre service
-        value: ${{{ env.RENDER_EXTERNAL_HOSTNAME }}}
-      - key: N8N_PROTOCOL
-        value: https
-      - key: WEBHOOK_URL
-        value: https://${{ env.N8N_HOST }}
-
-# --- SECTION DATABASES SUPPRIMÉE ---
-# La base de données Render n'est plus définie ici.
+databases:
+  - name: n8n-db
+    plan: free
+    # The free instance type is limited to 1 GB of disk
+    # space.
+    #
+    # If you later upgrade to a paid instance type, you can
+    # increase the disk size to any multiple of 5 GB by
+    # setting the `diskSizeGB` property.
+    #
+    # diskSizeGB: 5
